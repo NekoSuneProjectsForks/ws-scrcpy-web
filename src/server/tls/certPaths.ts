@@ -111,10 +111,16 @@ export type TlsHomeMigration =
  * thrown. HTTPS then reads as "no certificate yet" until a regenerate, which
  * is the same as a fresh install. Idempotent: once moved there is nothing to
  * move.
+ *
+ * After a move, the old parent (`%LOCALAPPDATA%\WsScrcpyWeb`) is removed if,
+ * and only if, it is a real, now-empty directory (item 154). On a Program
+ * Files install the TLS home was the only thing in it; on a per-user install
+ * it IS the install and holds files, so the non-recursive removal refuses it.
+ * A junction or symlink is never removed at all: see `removeIfEmpty`.
  */
 export function migrateLegacyTlsHome(
     paths: CertPaths,
-    fsImpl: Pick<typeof fs, 'existsSync' | 'renameSync' | 'readdirSync' | 'rmSync'> = fs,
+    fsImpl: Pick<typeof fs, 'existsSync' | 'renameSync' | 'readdirSync' | 'rmSync' | 'rmdirSync' | 'lstatSync'> = fs,
 ): TlsHomeMigration {
     const legacy = paths.legacyTlsDir;
     if (!legacy || !fsImpl.existsSync(legacy)) return { outcome: 'none' };
@@ -131,9 +137,34 @@ export function migrateLegacyTlsHome(
         // Bounded retry: endpoint AV holding a handle for a moment makes a
         // rename fail EPERM/EBUSY, and only under load (atomicFile.ts, item 140).
         renameSyncWithRetry(legacy, home, (from, to) => fsImpl.renameSync(from, to));
-        return { outcome: 'moved' };
     } catch (err) {
         return { outcome: 'failed', detail: err instanceof Error ? err.message : String(err) };
+    }
+    removeIfEmpty(path.dirname(legacy), fsImpl);
+    return { outcome: 'moved' };
+}
+
+/**
+ * Best-effort, and NON-recursive on purpose: `rmdirSync` without `recursive`
+ * refuses a real directory that holds anything (ENOTEMPTY), so it can only
+ * take away an empty one.
+ *
+ * A link is skipped BEFORE that, because the ENOTEMPTY protection does not
+ * cover it: on Windows `RemoveDirectoryW` deletes a junction or directory
+ * symlink whatever its target holds (measured on Node 24 in the review of
+ * item 154). A per-user install relocated with a junction would otherwise be
+ * unhooked from its own path. A link is also not a folder this app made.
+ *
+ * Any refusal, including a scanner holding the folder, is ignored: an empty
+ * folder left behind is cosmetic, and it must never turn a move that
+ * succeeded into a reported failure.
+ */
+function removeIfEmpty(dir: string, fsImpl: Pick<typeof fs, 'rmdirSync' | 'lstatSync'>): void {
+    try {
+        if (!fsImpl.lstatSync(dir).isDirectory()) return;
+        fsImpl.rmdirSync(dir);
+    } catch {
+        // Not empty (a per-user install lives here), already gone, or held open.
     }
 }
 
