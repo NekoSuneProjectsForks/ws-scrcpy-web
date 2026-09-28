@@ -89,6 +89,7 @@ FROM ${NODE_IMAGE} AS runtime
 # fixable highs "that no base rebuild had cleared".
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends adb \
  && rm -rf /var/lib/apt/lists/*
 
 # setpriv is the step-down mechanism (SP4 E3, which left it "to be verified
@@ -105,8 +106,8 @@ WORKDIR /app
 # comes back empty from the packages API, leaving the package orphaned in the
 # UI. The label is read at push time, so it only takes effect on the next
 # published release.
-LABEL org.opencontainers.image.source="https://github.com/bilbospocketses/ws-scrcpy-web" \
-      org.opencontainers.image.url="https://github.com/bilbospocketses/ws-scrcpy-web" \
+LABEL org.opencontainers.image.source="https://github.com/NekoSuneProjectsForks/ws-scrcpy-web" \
+      org.opencontainers.image.url="https://github.com/NekoSuneProjectsForks/ws-scrcpy-web" \
       org.opencontainers.image.title="ws-scrcpy-web" \
       org.opencontainers.image.description="Self-hosted, browser-based Android screen mirroring over WebSocket." \
       org.opencontainers.image.licenses="GPL-3.0-only"
