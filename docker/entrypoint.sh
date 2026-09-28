@@ -19,6 +19,14 @@ if [ "$(id -u)" = '0' ]; then
     # creating it here means the first boot writes into a directory the app
     # already owns, instead of relying on the logger's own mkdir.
     mkdir -p /data/dependencies /data/home /data/logs
+
+    # Google does not publish Linux ARM64 platform-tools. On ARM64 hosts use
+    # Debian's native adb from the image and expose it at the managed dependency
+    # path the application already expects.
+    if [ "$(uname -m)" = "aarch64" ] && command -v adb >/dev/null 2>&1; then
+        mkdir -p /data/dependencies/adb
+        ln -sfn "$(command -v adb)" /data/dependencies/adb/adb
+    fi
     # Only when it is actually wrong. `chown -R` on a populated /data with a
     # large dependencies tree costs real seconds on every boot for nothing.
     if [ "$(stat -c '%u' /data)" != "$APP_UID" ]; then
