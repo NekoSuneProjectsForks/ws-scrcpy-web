@@ -207,6 +207,15 @@ export function getDependencyDefinitions(depsPath: string): DependencyDefinition
                 return runVersionCommand(exe, ['--version'], /Version ([\d.]+)/);
             },
             checkLatest: async () => {
+                // Google does not publish Linux ARM64 platform-tools. Docker ARM64
+                // images seed Debian's native /usr/bin/adb into <deps>/adb/adb,
+                // so treat that native package as the authoritative version and
+                // never offer the x86-64 Google ZIP as an update.
+                if (platform === 'linux' && arch === 'arm64') {
+                    const exe = path.join(depsPath, 'adb', 'adb');
+                    return runVersionCommand(exe, ['--version'], /Version ([\d.]+)/);
+                }
+
                 const res = await fetchOkWithRetry('https://dl.google.com/android/repository/repository2-3.xml', {
                     ...VERSION_CHECK_POLICY,
                     onRetry: (n) => log.warn(`adb latest check ${n.attempt}/${n.attempts}: ${n.reason}`),
@@ -220,6 +229,9 @@ export function getDependencyDefinitions(depsPath: string): DependencyDefinition
             getDownloadUrl: (_version) => {
                 if (platform === 'win32') {
                     return 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip';
+                }
+                if (arch === 'arm64') {
+                    throw new Error('Linux ARM64 uses the native Debian adb package; Google platform-tools is x86-64 only');
                 }
                 return 'https://dl.google.com/android/repository/platform-tools-latest-linux.zip';
             },
